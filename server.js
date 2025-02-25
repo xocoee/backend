@@ -16,6 +16,13 @@ wss.on('connection', (ws) => {
   ws.send(JSON.stringify({ message: 'Welcome to the WebSocket server!' }))
   ws.send(JSON.stringify({ messages: data }))
 
+  const pingInterval = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.ping()
+    }
+  }, 1000)
+
+
   ws.on('message', (message) => {
     console.log('Received from client:', message)
 
@@ -27,9 +34,12 @@ wss.on('connection', (ws) => {
       }
     })
   })
-
+  ws.on('pong', () => {
+    console.log('Received pong from client')
+  })
   ws.on('close', () => {
     console.log('WebSocket client disconnected')
+    clearInterval(pingInterval)
   })
 })
 
