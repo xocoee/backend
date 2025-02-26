@@ -19,9 +19,9 @@ wss.on('connection', (ws) => {
   const pingInterval = setInterval(() => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.ping()
+      ws.lastPingTime = Date.now()
     }
   }, 1000)
-
 
   ws.on('message', (message) => {
     console.log('Received from client:', message)
@@ -36,6 +36,22 @@ wss.on('connection', (ws) => {
   })
   ws.on('pong', () => {
     console.log('Received pong from client')
+    if (ws.lastPingTime) {
+      const pongTime = Date.now()
+      const pingDelay = pongTime - ws.lastPingTime
+      const pongDate = new Date(pongTime)
+
+      const day = String(pongDate.getDate()).padStart(2, '0')
+      const month = String(pongDate.getMonth() + 1).padStart(2, '0')
+      const year = pongDate.getFullYear()
+      const hours = String(pongDate.getHours()).padStart(2, '0')
+      const minutes = String(pongDate.getMinutes()).padStart(2, '0')
+      const seconds = String(pongDate.getSeconds()).padStart(2, '0')
+
+      const formattedTime = `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`
+      console.log(`Time: ${formattedTime}`)
+      console.log(`Ping delay: ${pingDelay} ms`)
+    }
   })
   ws.on('close', () => {
     console.log('WebSocket client disconnected')
