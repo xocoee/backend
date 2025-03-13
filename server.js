@@ -1,6 +1,7 @@
 const express = require('express')
 const WebSocket = require('ws')
 const http = require('http')
+const mongoose = require('mongoose')
 
 const app = express()
 const server = http.createServer(app)
@@ -10,11 +11,35 @@ app.use(express.json())
 
 let data = []
 
+mongoose
+  .connect('mongodb://localhost:27017/websocketDB', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => {
+    console.log('MongoDB connected')
+  })
+  .catch((err) => {
+    console.error('Error connecting to MongoDB', err)
+  })
+
+const messageSchema = new mongoose.Schema({
+  content: String,
+  timestamp: { type: Date, default: Date.now },
+})
+
+const Message = mongoose.model('Message', messageSchema)
+
+app.use(express.json())
+
 wss.on('connection', (ws) => {
   console.log('New WebSocket client connected')
 
   ws.send(JSON.stringify({ message: 'Welcome to the WebSocket server!' }))
-  ws.send(JSON.stringify({ messages: data }))
+
+  Message.find().then((messages) => {
+    ws.send(JSON.stringify({ messages: messages }))
+  })
 
   const pingInterval = setInterval(() => {
     if (ws.readyState === WebSocket.OPEN) {
@@ -26,14 +51,20 @@ wss.on('connection', (ws) => {
   ws.on('message', (message) => {
     console.log('Received from client:', message)
 
-    data.push(message)
+    const newMessage = new Message({ content: message })
+    newMessage.save().then(() => {
+      console.log('New message saved to MongoDB')
 
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify({ messages: data }))
-      }
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          Message.find().then((messages) => {
+            client.send(JSON.stringify({ messages: messages }))
+          })
+        }
+      })
     })
   })
+
   ws.on('pong', () => {
     console.log('Received pong from client')
     if (ws.lastPingTime) {
@@ -61,7 +92,14 @@ wss.on('connection', (ws) => {
 
 app.get('/api/data', (req, res) => {
   console.log('get request', data)
-  res.json(data)
+  Message.find()
+    .then((messages) => {
+      res.json(messages)
+    })
+    .catch((err) => {
+      console.error('Error fetching messages', err)
+      res.status(500).json({ message: 'Error fetching messages' })
+    })
 })
 
 app.post('/api/data', (req, res) => {
@@ -76,16 +114,20 @@ app.post('/api/data', (req, res) => {
 
 app.delete('/api/data/:id', (req, res) => {
   console.log('delete request', res)
-  const { id } = req.params
-  const index = data.findIndex((item) => item.id === id)
-  if (index !== -1) {
-    const removedItem = data.splice(index, 1)
-    console.log('deleted item', removedItem)
-    res.json(removedItem)
-  } else {
-    console.log('Item not found with id:', id)
-    res.status(404).json({ message: 'Item not found' })
-  }
+  Message.findByIdAndDelete(id)
+    .then((removedItem) => {
+      if (removedItem) {
+        console.log('Deleted message', removedItem)
+        res.json(removedItem)
+      } else {
+        console.log('Message not found with id:', id)
+        res.status(404).json({ message: 'Message not found' })
+      }
+    })
+    .catch((err) => {
+      console.error('Error deleting message', err)
+      res.status(500).json({ message: 'Error deleting message' })
+    })
 })
 
 server.listen(3000, () => {
