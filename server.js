@@ -114,7 +114,8 @@ app.post('/api/data', (req, res) => {
 
 app.delete('/api/data/:id', (req, res) => {
   console.log('delete request', res)
-  Message.findByIdAndDelete(id)
+  const { id } = req.params;
+Message.findByIdAndDelete(id)
     .then((removedItem) => {
       if (removedItem) {
         console.log('Deleted message', removedItem)
